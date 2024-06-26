@@ -149,3 +149,353 @@ vamos mais chamar o Docker diretamente, vamos chamar o Docker Compose. Já insta
 
   colocar git para ignora
   env, arquivos de salvamento do mysql
+  ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  proxy reverso com nginx
+
+  docker-compose down
+  para encerrar todos os contêineres que estão em execução
+
+
+vamos abrir o Vim para editar o arquivo docker-compose.yml diretamente no terminal.
+
+
+  vim docker-compose.yml
+
+Na seção de serviços, onde temos atualmente o serviço MySQL e o da aplicação,
+vamos inserir um novo serviço antes da parte dos volumes. Este será o serviço
+do NGINX. Vamos declará-lo como nginx. A imagem que será baixada é a do NGINX,
+que está disponível publicamente no Docker Hub, com a versão stable-alpine.
+
+  nginx:
+      image: nginx:stable-alpine
+      ports:
+              -"80:80"
+
+
+para terminar as mudança ,
+:wq!
+
+depois dar docker composer up
+
+
+
+Configurando nginx
+
+para criar uma pasta
+
+mkdir nginx
+
+para entra dentro da pasta
+cd nginx
+
+para cria um arquivo configurado nginx
+vim nginx.conf
+
+
+server {
+    listen 80;
+    server_name app;
+
+    location / {
+        proxy_pass http://app:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+
+passar esse aquivo aqui
+
+
+
+
+
+
+Nessas configurações, estamos basicamente definindo um servidor e especificando que ele deve escutar na porta 80, além de nomeá-lo como app. Normalmente, esse nome seria o domínio da aplicação, como "meusite.com.br", por exemplo, ou algo similar.
+
+Na seção location, estamos informando que, para qualquer URL que chegue na aplicação, o NGINX deve atuar como um proxy reverso. Para isso, usamos a diretiva proxy_pass, indicando que todas as requisições devem ser encaminhadas para http://app:8080, ou seja, para nossa aplicação na porta 8080.
+
+O nome app foi definido no arquivo docker-compose.yml, como o nome do nosso serviço de aplicação. Portanto, esse nome deve coincidir exatamente com o que está configurado lá.
+
+As demais configurações são apenas para garantir que o NGINX encaminhe os cabeçalhos das requisições para nossa aplicação na porta 8080. É bastante simples. Agora, vamos salvar as alterações no arquivo pressionando "ESC" seguido de :wq.
+
+
+
+Nas configurações do container NGINX, após configurar a porta, adicionaremos uma diretiva de volumes para configurar um volume. Começaremos passando ./nginx: que é o diretório atual do host, ou seja, a máquina servidora. Em seguida, mapeamos esta pasta para /etc/nginx/conf.d.
+
+nginx:
+    image: nginx:stable-alpine
+    ports:
+        - "80:80"
+    volumes:
+        - ./nginx:/etc/nginx/conf.d
+
+
+
+ Faremos mais algumas mudanças para manter a consistência. Então, adicionaremos a propriedade restart, da mesma forma que fizemos nos outros containers, passando unless-stopped. Assim, ele reiniciará o container caso ele pare por algum motivo, a menos que seja explicitamente encerrado no servidor.
+
+ nginx:
+     image: nginx:stable-alpine
+     ports:
+         - "80:80"
+     volumes:
+         - ./nginx:/etc/nginx/conf.d
+     restart: unless-stopped
+
+
+
+
+Como última propriedade, adicionarmos o depends_on, indicando que o container do NGINX depende do container da aplicação. Assim, quando o Docker iniciar as instâncias, ele primeiro iniciará o MySQL, depois a aplicação e, por último, o NGINX.
+
+nginx:
+    image: nginx:stable-alpine
+    ports:
+        - "80:80"
+    volumes:
+        - ./nginx:/etc/nginx/conf.d
+    restart: unless-stopped
+    depends_on:
+        - app
+
+
+ Então, vamos salvar as alterações no arquivo pressionando "ESC" seguido de :wq, e executar os contêineres novamente com o comando docker-compose up. Não usaremos o parâmetro -d para que possamos ver os logs e acompanhar no terminal.
+
+
+ server {
+     listen 80;
+     server_name app;
+
+     location / {
+         return 301 https://$host$request_uri;
+     }
+ }
+
+ server {
+     listen 443 ssl;
+     server_name app;
+
+     ssl_certificate /etc/nginx/certificates/certificado.crt;
+     ssl_certificate_key /etc/nginx/certificates/chave.key;
+
+     location / {
+         proxy_pass http://app:8080;
+         proxy_set_header Host $host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto $scheme;
+     }
+ }
+ --------------------------------------OTIMIZAÇÕES NO BANCO DE DADOS--------------------------------------------------
+CONFIGURANDO POOL DE CONEXÃO PELO PROPERTIES
+spring.datasource.hikari.minimum-idle=25   -> MINIMO DE CONEXAO
+spring.datasource.hikari.maximum-pool-size=50   -> MAXIMO DE CONEXÃO
+spring.datasource.hikari.connectionTimeout=10000      -> QUANTO TEMPO DE VIDA CONEXÃO
+spring.datasource.hikari.idleTimeout=600000      -> TEMPO PODE FICAR INATIVA
+spring.datasource.hikari.maxLifetime=1800000  -> TEMPO MAXIMO DE VIDA DE MA CONEXÃO
+
+
+outra coisa pode ajudar é criar index para pesquisa em tabelas
+CREATE INDEX idx_ingressos_disponiveis ON ingressos(evento_id, descricao);
+
+isso mostra infrormação da tabela
+
+explain select * from ingressos where descricao = 'CADEIRA';
+
+aqui mostra tempo de execulção de uma tabela
+
+explain analyze select * from ingressos where descricao = 'CADEIRA';
+-----------------------------------Cache com Redis-------------------------------------------------------------------
+primeiro tem add o conteiner a imagem
+  redis:
+    image: redis:7.2.4
+    restart: unless-stopped
+
+
+    e docker-compose up
+
+
+No momento, o arquivo docker-compose cria três containers: o do MySQL (mysql), o da aplicação (app), e o do Nginx (nginx).
+
+
+
+
+configurando readis
+add a dependecia caches----------------------------------------------------------------------------------------
+<dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+<dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-cache</artifactId>
+</dependency>
+cache do spring boot do cache
+e do redis
+-------------------------------------------------------------------------------------------------------------------------------
+org.springframework.boot:spring-boot-starter-data-redis:3.2.2
+org.springframework.boot:spring-boot-starter-cache:3.2.2
+
+-------------------proprites-----------------
+nome dele redis por que definimos isso no conteiner no docker composer
+spring.redis.host=redis
+spring.redis.port=6379
+-----------------------------@EnableAsync
+                             @EnableCaching-------------------------------------------------
+por fim add a anotaçãp EnableCaching no application
+
+
+-------------como configura isso no spring ---------------------------------------------------------
+vamos o metodo que esta listando eventos, depois entra no service
+coloca o @Cacheable todas que vc quer salvar em cahe
+
+
+no service
+
+  @Cacheable
+    public List<DadosEvento> listarProximosEventos() {
+        var proximosEventos = eventoRepository.findAllByDataAfter(LocalDateTime.now());
+        return proximosEventos.stream().map(DadosEvento::new).toList();
+    }
+para diferenciar um cache de outro nos colocamos um id nele um value
+para outro cache coloca o vlue dele
+  @Cacheable(value = "proximoEvento")
+    public List<DadosEvento> listarProximosEventos() {
+        var proximosEventos = eventoRepository.findAllByDataAfter(LocalDateTime.now());
+        return proximosEventos.stream().map(DadosEvento::new).toList();
+    }
+
+todas class esta voltando tipo DadosEventos, tem que implementar serializebe mas so quais precisa
+
+
+implements Serializable
+
+isso faz com que os dados fique em formato binario
+
+
+docker run --name redis -p 6379:6379 redis:7.2.4
+
+
+    @CacheEvict(value = "proximosEventos",allEntries = true)
+    public DadosEvento cadastrar(DadosCadastroEvento dadosCadastro) {
+
+
+    }
+
+sempre que chamar metodo cadadastra limpa o cache e começa do zero de novo
+allEntries = true impart tudo que tem no cache
+
+
+---------------------------------Escalando a aplicaçao---------------------------------------
+para ter duas instancia do seu app
+vc pode so muda nome e dar contra o c e contra v
+ou fazer deste jeito
+
+
+ou deste jeito
+que vai herdar tudo do outro composer
+app-1: &app
+  image: aluracursos/codechella:latest
+  env_file: /env/app.env
+  restart: unless-stopped
+  depends_on:
+     mysql:
+      condition: service_healthy
+
+app-2:
+  <<: *app
+
+configura nginx
+
+nginx:
+  image: nginx:stable-alpine
+  ports:
+    - "80:80"
+  volumes:
+    -./nginx:/etc/nginx/conf.d
+  restart: unless-stopped
+  depends_on:
+    - app-1
+    - app-2
+
+abrir arquivo de segurança do nginx
+
+vim nginx/nginx.conf
+
+configura
+upstream servers {
+  server app-1:8080;
+  server app-2:8080;
+}
+
+e no final arquivo vai ficar assim
+
+
+upstream servers {
+  server app-1:8080;
+  server app-2:8080;
+}
+
+server {
+listen 80;
+
+location / {
+  proxy_pass http://servers
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+ }
+}
+
+
+------------------------------------limitando recursos-----------------------------------------
+linha de comando
+docker run --cpu 1 --memory 512m nginx
+
+por docker-composer
+redis:
+  image: redis:7.2.4
+  restart: unless-stopped
+  deploy:
+    resources:
+      limits:
+        cpus: '1'
+        memory: 512M
+---------------------------------------------------------------------------------------------------------------------
+Round Robin: Esta é a estratégia padrão do Nginx. O Nginx distribui as requisições de forma sequencial entre os servidores backend, garantindo que cada servidor receba uma quantidade igual de requisições ao longo do tempo.
+
+Least Connections (Menor número de conexões): Esta estratégia direciona as requisições para o servidor com o menor número de conexões ativas no momento. É útil quando os servidores backend têm capacidades diferentes ou quando o tempo de resposta pode variar entre os servidores.
+
+IP Hash (Hash do endereço IP do cliente): Com esta estratégia, o Nginx calcula um hash do endereço IP do cliente e usa esse valor para determinar para qual servidor enviar a requisição. Isso garante que todas as requisições de um mesmo cliente sejam enviadas para o mesmo servidor, útil para manter a consistência em aplicações que requerem sessões persistentes.
+
+Least Time (Menor tempo de resposta): O Nginx direciona as requisições para o servidor que teve o menor tempo de resposta em um determinado período de tempo. Esta estratégia é útil para otimizar o desempenho da aplicação, enviando requisições para os servidores mais rápidos disponíveis.
+
+Least Connections:
+
+upstream servers {
+  least_conn;
+  server app-1:8080 weight=1;
+  server app-2:8080 weight=2;
+}
+
+server {
+  listen 80;
+  location / {
+      proxy_pass http://servers;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+
+      add_header X-Backend-Server $upstream_addr;
+
+  }
+}
+
+
+
+
+
+

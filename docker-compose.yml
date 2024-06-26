@@ -21,5 +21,20 @@ services:
       mysql:
         condition: service_healthy
 
+  nginx:
+    image: nginx:stable-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+    restart: unless-stopped
+    depends_on:
+      - app
+  redis:
+    image: redis:7.2.4
+    restart: unless-stopped
+
+
+
 volumes:
   mysql-data:
