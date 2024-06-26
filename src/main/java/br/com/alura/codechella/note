@@ -493,6 +493,75 @@ server {
 
   }
 }
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Para fazer essa escalabilidade horizontal, você precisará configurar a aplicação para executar em duas instâncias no docker-compose.yml:
+
+app-1: &app
+  image: aluracursos/codechella:latest
+  env_file: ./env/app.env
+  restart: unless-stopped
+  depends_on:
+    mysql:
+      condition: service_healthy
+
+app-2:
+  <<: *app
+
+nginx:
+  image: nginx:stable-alpine
+  ports:
+    - "80:80"
+  volumes:
+    - ./nginx:/etc/nginx/conf.d
+  restart: unless-stopped
+  depends_on:
+    - app-1
+    - app-2
+COPIAR CÓDIGO
+Além disso, precisará alterar as configurações do nginx para que ele faça o balanceamento de carga entre as instâncias da aplicação, no arquivo nginx.conf:
+
+upstream servers {
+  server app-1:8080;
+  server app-2:8080;
+}
+
+server {
+  listen 80;
+  location / {
+      proxy_pass http://servers;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      add_header X-Backend-Server $upstream_addr;
+  }
+}
+COPIAR CÓDIGO
+Pronto! Agora, basta reiniciar o Docker Compose:
+
+docker-compose restart -d
+
+
+
+
+
+
+
+
+
+
+Documentação do Docker (gratuito, português, texto)
+
+Site da documentação do Docker, contendo diversos guias e manuais para sua utilização em diversos cenários distintos.
+
+Documentação do EC2 (gratuito, português, texto)
+
+Nessa documentação, é ensinado como funcionam as instâncias Linux EC2 da AWS, com links para artigos e tutoriais focados na instalação e configuração de um servidor.
+
+The Twelve-Factor App (gratuito, português, texto)
+
+Site da metodologia The Twelve-Factor App, explicando a motivação dos 12 princípios e detalhando cada um deles.
+
 
 
 
